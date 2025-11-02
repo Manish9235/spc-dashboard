@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRS Part SPC Control Chart Tool</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind to use 'Inter' font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#059669', // Emerald Green
+                        'secondary': '#f97316', // Orange
+                        'background': '#fefefe',
+                        'card': '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Load Chart.js for visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        /* Custom styles for better readability and chart containment */
+        .chart-container {
+            max-width: 100%;
+            height: 350px;
+            margin: 0 auto;
+        }
+        /* Custom scrollbar for data table */
+        .data-table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .data-table-container::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="bg-white shadow-lg rounded-2xl p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">FRS Part SPC Dashboard</h1>
+            <p class="text-gray-500 mt-1">Real-time X-Bar and Range Chart Analysis for Quality Control</p>
+        </header>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Data Input and Dimension Specs -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Dimension Specifications -->
+                <div id="spec-card" class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-3 text-primary">Dimension Specifications</h2>
+                    
+                    <!-- Dimension Toggle Buttons -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Dimension:</label>
+                        <div id="dimension-toggles" class="flex flex-wrap gap-2">
+                            <!-- Buttons populated by JS -->
+                        </div>
+                    </div>
+
+                    <div id="selected-spec" class="border-t pt-3">
+                        <p class="text-xs text-gray-500">Selected Spec: <span id="spec-title" class="text-gray-900 font-medium">--</span></p>
+                        <p class="text-xs text-gray-500">Target (<span class="font-bold">T</span>): <span id="spec-target" class="text-gray-900 font-medium">--</span></p>
+                        <p class="text-xs text-gray-500">Upper Spec Limit (<span class="font-bold">USL</span>): <span id="spec-usl" class="text-gray-900 font-medium">--</span></p>
+                        <p class="text-xs text-gray-500">Lower Spec Limit (<span class="font-bold">LSL</span>): <span id="spec-lsl" class="text-gray-900 font-medium">--</span></p>
+                    </div>
+                </div>
+
+                <!-- Data Entry Form -->
+                <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-primary">Daily Data Entry (Subgroup n=2)</h2>
+                    <form id="dataEntryForm">
+                        <div class="mb-4">
+                            <label for="dateInput" class="block text-sm font-medium text-gray-700">Date/Subgroup (Day <span id="currentDay">1</span>):</label>
+                            <input type="date" id="dateInput" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-secondary focus:border-secondary transition duration-150 ease-in-out" required>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="sample1" class="block text-sm font-medium text-gray-700">Sample 1 Value:</label>
+                                <input type="number" step="0.001" id="sample1" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-secondary focus:border-secondary transition duration-150 ease-in-out" placeholder="e.g., 0.45" required>
+                            </div>
+                            <div>
+                                <label for="sample2" class="block text-sm font-medium text-gray-700">Sample 2 Value:</label>
+                                <input type="number" step="0.001" id="sample2" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-secondary focus:border-secondary transition duration-150 ease-in-out" placeholder="e.g., 0.48" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-secondary text-white py-2 px-4 rounded-lg shadow-md hover:bg-orange-600 transition duration-300 ease-in-out font-bold">
+                            Add Subgroup Data
+                        </button>
+                    </form>
+                    <div id="messageBox" class="mt-3 text-center text-sm font-medium hidden"></div>
+                </div>
+
+                <!-- Data Management -->
+                <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-primary">Data Management</h2>
+                    <button id="simulateBtn" onclick="generateSimulatedData()" class="w-full bg-primary text-white py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition duration-300 ease-in-out font-bold mb-3">
+                        Generate 30-Day Simulation
+                    </button>
+                    <!-- Download button now calls the function to export ALL data -->
+                    <button id="downloadBtn" onclick="downloadCSV()" class="w-full bg-gray-500 text-white py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition duration-300 ease-in-out font-bold disabled:opacity-50">
+                        Download ALL Data (.csv)
+                    </button>
+                    <p class="mt-2 text-sm text-gray-500">Current Subgroups: <span id="subgroupCount">0</span> / 30</p>
+                </div>
+            </div>
+
+            <!-- Charts and Capability Display -->
+            <div class="lg:col-span-2 space-y-6">
+
+                <!-- Process Capability Card -->
+                <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-2xl font-semibold mb-3 text-secondary">Process Capability (Cp / Cpk)</h2>
+                    <div id="capability-results" class="grid grid-cols-2 gap-4 text-center">
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-extrabold text-gray-800" id="cpValue">--</p>
+                            <p class="text-sm font-medium text-gray-500">Process Capability (Cp)</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <p class="text-3xl font-extrabold text-gray-800" id="cpkValue">--</p>
+                            <p class="text-sm font-medium text-gray-500">Process Capability Index (Cpk)</p>
+                        </div>
+                    </div>
+                    <div id="capability-status" class="mt-4 p-3 rounded-lg text-sm font-semibold text-center hidden"></div>
+                </div>
+
+                <!-- X-bar Chart -->
+                <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-3 text-primary">Average (X-Bar) Control Chart</h2>
+                    <div class="chart-container">
+                        <canvas id="xBarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- R Chart -->
+                <div class="bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-3 text-primary">Range Control Chart</h2>
+                    <div class="chart-container">
+                        <canvas id="rChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw Data Table (Hidden on small screens) -->
+        <div class="mt-6 bg-card p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 class="text-xl font-semibold mb-3 text-primary">Raw Data Table for <span id="table-dimension-title">BC1</span></h2>
+            <div class="data-table-container overflow-x-auto">
+                <table id="dataTable" class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sample 1</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sample 2</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">X-Bar</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Range</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="dataBody">
+                        <tr><td colspan="6" class="p-4 text-center text-gray-500">No data entered yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONSTANTS AND GLOBAL STATE ---
+        const SPC_CONSTANTS = {
+            n: 2,
+            A2: 1.880,
+            D3: 0,
+            D4: 3.267,
+            d2: 1.128 // For Process Sigma calculation
+        };
+
+        const DIMENSION_SPECS = {
+            'BC1': { T: 0.5, USL: 0.5, LSL: 0.2, title: 'BC1: 0.5 +0.0/-0.3' },
+            'C1': { T: 0.1, USL: 0.4, LSL: 0.1, title: 'C1: 0.1 +0.3' },
+            'C2': { T: 0.3, USL: 0.3, LSL: 0.1, title: 'C2: 0.3 +0.0/-0.2' },
+            'C3': { T: 0.5, USL: 0.5, LSL: 0.2, title: 'C3: 0.5 +0.0/-0.3' },
+            'CR': { T: 1.5, USL: 1.8, LSL: 1.2, title: 'CR: 1.5 +0.3/-0.3' }
+        };
+
+        let currentDimension = 'BC1';
+        // Data structure: { date: string, s1: number, s2: number, xBar: number, R: number }
+        let dailyData = {}; // Key: dimensionName, Value: array of subgroup objects
+
+        let xBarChartInstance = null;
+        let rChartInstance = null;
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Safely parse a float, returning null if invalid.
+         * @param {string} value 
+         * @returns {number | null}
+         */
+        function safeParseFloat(value) {
+            const num = parseFloat(value);
+            return isNaN(num) ? null : num;
+        }
+
+        /**
+         * Displays a temporary status message in the message box.
+         * @param {string} message 
+         * @param {boolean} isError 
+         */
+        function showMessage(message, isError = false) {
+            const box = document.getElementById('messageBox');
+            box.textContent = message;
+            // Use the spread operator to safely add multiple classes
+            const classList = isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700';
+            box.className = 'mt-3 p-2 rounded-lg text-sm font-medium'; // Reset base classes
+            box.classList.add(...classList.split(' '));
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.add('hidden'), 3000);
+        }
+
+        /**
+         * Generates a normally distributed random number using the Box-Muller transform.
+         * @param {number} mean - The mean of the distribution.
+         * @param {number} stddev - The standard deviation of the distribution.
+         * @returns {number} The random number.
+         */
+        function gaussianRandom(mean, stddev) {
+            let u = 0, v = 0;
+            // Converting [0,1) to (0,1)
+            while(u === 0) u = Math.random(); 
+            while(v === 0) v = Math.random();
+            let z = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+            return z * stddev + mean;
+        }
+        
+        // --- INITIALIZATION AND UI SETUP ---
+
+        /**
+         * Initializes the application state and UI elements.
+         */
+        function initializeApp() {
+            // Initialize dailyData for all dimensions from localStorage
+            Object.keys(DIMENSION_SPECS).forEach(dim => {
+                dailyData[dim] = JSON.parse(localStorage.getItem(`spcData_${dim}`) || '[]');
+            });
+
+            // Populate dimension toggles
+            const toggleContainer = document.getElementById('dimension-toggles');
+            Object.keys(DIMENSION_SPECS).forEach(key => {
+                const button = document.createElement('button');
+                button.id = `toggle-${key}`;
+                button.value = key;
+                button.textContent = key;
+                button.type = 'button';
+                button.onclick = () => loadDimensionData(key);
+                // Base styling for the buttons
+                button.className = 'py-1 px-3 text-sm font-medium rounded-full transition duration-150 ease-in-out border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 shadow-sm';
+                toggleContainer.appendChild(button);
+            });
+            
+            // Set current dimension and load data for the default dimension
+            currentDimension = Object.keys(DIMENSION_SPECS)[0]; 
+            loadDimensionData(currentDimension);
+
+            // Set up form submission listener
+            document.getElementById('dataEntryForm').addEventListener('submit', handleFormSubmit);
+
+             // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dateInput').value = today;
+        }
+
+        /**
+         * Loads data for the newly selected dimension and updates the UI.
+         * @param {string} newDimension - The key of the dimension to load.
+         */
+        function loadDimensionData(newDimension) {
+            if (newDimension === currentDimension && document.getElementById('spec-target').textContent !== '--') {
+                return; // Prevent unnecessary reload unless it's the very first load
+            }
+
+            currentDimension = newDimension;
+            
+            // 1. Update Specifications Display
+            const spec = DIMENSION_SPECS[currentDimension];
+            document.getElementById('spec-title').textContent = spec.title;
+            document.getElementById('spec-target').textContent = spec.T;
+            document.getElementById('spec-usl').textContent = spec.USL;
+            document.getElementById('spec-lsl').textContent = spec.LSL;
+            document.getElementById('table-dimension-title').textContent = currentDimension;
+
+            // 2. Update Toggle UI
+            document.querySelectorAll('#dimension-toggles button').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white', 'hover:bg-green-700', 'border-primary');
+                btn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-100', 'border-gray-300');
+            });
+
+            const activeBtn = document.getElementById(`toggle-${currentDimension}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100', 'border-gray-300');
+                activeBtn.classList.add('bg-primary', 'text-white', 'hover:bg-green-700', 'border-primary');
+            }
+
+
+            // 3. Recalculate and re-render charts and table
+            const currentData = dailyData[currentDimension];
+            document.getElementById('currentDay').textContent = currentData.length + 1;
+            updateDataStorageUI(currentData);
+            updateDataTable(currentData);
+            
+            if (currentData.length >= SPC_CONSTANTS.n) {
+                const results = calculateSPC(currentData, currentDimension);
+                renderCharts(currentData, results);
+                updateCapabilityMetrics(results);
+                document.getElementById('downloadBtn').disabled = false;
+            } else {
+                // Clear charts and capability if insufficient data
+                clearCharts();
+                updateCapabilityMetrics({ cp: '--', cpk: '--', sigma: null });
+            }
+        }
+
+
+        // --- DATA HANDLING ---
+
+        /**
+         * Handles the submission of the data entry form.
+         * @param {Event} event 
+         */
+        function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const date = document.getElementById('dateInput').value;
+            const s1 = safeParseFloat(document.getElementById('sample1').value);
+            const s2 = safeParseFloat(document.getElementById('sample2').value);
+            const currentData = dailyData[currentDimension];
+
+            if (currentData.length >= 30) {
+                 showMessage('Maximum 30 subgroups reached for a month.', true);
+                return;
+            }
+
+            if (!date || s1 === null || s2 === null) {
+                showMessage('Please enter valid data for both samples and a date.', true);
+                return;
+            }
+
+            // Check if date is already used
+            if (currentData.some(d => d.date === date)) {
+                showMessage('Data for this date already exists. Please choose a new date or delete the existing entry first.', true);
+                return;
+            }
+
+            const xBar = (s1 + s2) / 2;
+            const R = Math.abs(s1 - s2);
+
+            const newEntry = { date, s1, s2, xBar, R };
+            currentData.push(newEntry);
+            
+            // Sort by date to maintain order
+            currentData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // Save to localStorage
+            localStorage.setItem(`spcData_${currentDimension}`, JSON.stringify(currentData));
+            
+            // Update UI
+            updateDataStorageUI(currentData);
+            updateDataTable(currentData);
+            document.getElementById('dataEntryForm').reset();
+            document.getElementById('dateInput').value = new Date().toISOString().split('T')[0]; // Reset date to today
+
+            if (currentData.length >= SPC_CONSTANTS.n) {
+                const results = calculateSPC(currentData, currentDimension);
+                renderCharts(currentData, results);
+                updateCapabilityMetrics(results);
+                document.getElementById('downloadBtn').disabled = false;
+            }
+
+            showMessage(`Data for Day ${currentData.length} added successfully to ${currentDimension}!`, false);
+        }
+
+        /**
+         * Generates 30 days of simulated SPC data for the current dimension.
+         */
+        function generateSimulatedData() {
+            const spec = DIMENSION_SPECS[currentDimension];
+            const data = [];
+            const mean_stable = spec.T; 
+            const std_dev = (spec.USL - spec.LSL) / (6 * 1.6); 
+
+            // Clear existing data before simulation
+            dailyData[currentDimension] = [];
+
+            for (let i = 0; i < 30; i++) {
+                // Generate chronological dates
+                const date = new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                
+                // Simulate a process shift on day 16 (index 15)
+                let current_mean = mean_stable;
+                if (i >= 15) {
+                    current_mean = mean_stable + std_dev * 1.5;
+                }
+
+                // Generate two samples using Gaussian distribution
+                let s1 = gaussianRandom(current_mean, std_dev);
+                let s2 = gaussianRandom(current_mean, std_dev);
+                
+                s1 = Math.min(spec.USL + 0.05, Math.max(spec.LSL - 0.05, s1));
+                s2 = Math.min(spec.USL + 0.05, Math.max(spec.LSL - 0.05, s2));
+
+
+                const xBar = (s1 + s2) / 2;
+                const R = Math.abs(s1 - s2);
+
+                data.push({ date, s1: parseFloat(s1.toFixed(4)), s2: parseFloat(s2.toFixed(4)), xBar: parseFloat(xBar.toFixed(4)), R: parseFloat(R.toFixed(4)) });
+            }
+
+            dailyData[currentDimension] = data;
+            localStorage.setItem(`spcData_${currentDimension}`, JSON.stringify(data));
+            
+            // Update UI and Charts
+            const currentData = dailyData[currentDimension];
+            updateDataStorageUI(currentData);
+            updateDataTable(currentData);
+            
+            if (currentData.length >= SPC_CONSTANTS.n) {
+                const results = calculateSPC(currentData, currentDimension);
+                renderCharts(currentData, results);
+                updateCapabilityMetrics(results);
+                document.getElementById('downloadBtn').disabled = false;
+            }
+            showMessage(`30 days of simulated data generated for ${currentDimension}! Check the charts for a process shift!`, false);
+        }
+
+        /**
+         * Updates the subgroup count display.
+         * @param {Array} data 
+         */
+        function updateDataStorageUI(data) {
+            document.getElementById('subgroupCount').textContent = data.length;
+            document.getElementById('currentDay').textContent = data.length + 1;
+        }
+
+        /**
+         * Updates the raw data table display.
+         * @param {Array} data 
+         */
+        function updateDataTable(data) {
+            const tbody = document.getElementById('dataBody');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No data entered yet.</td></tr>';
+                 return;
+            }
+
+            data.forEach((d, index) => {
+                const row = tbody.insertRow();
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                row.insertCell().textContent = index + 1;
+                row.insertCell().textContent = d.date;
+                row.insertCell().textContent = d.s1.toFixed(3);
+                row.insertCell().textContent = d.s2.toFixed(3);
+                
+                const xBarCell = row.insertCell();
+                xBarCell.textContent = d.xBar.toFixed(3);
+                
+                const RCell = row.insertCell();
+                RCell.textContent = d.R.toFixed(3);
+            });
+        }
+
+
+        // --- SPC CALCULATION LOGIC ---
+
+        /**
+         * Calculates the SPC parameters (Control Limits and Capability).
+         * @param {Array} data - Array of subgroup objects.
+         * @param {string} dimKey - The key of the dimension being calculated.
+         * @returns {Object} SPC results.
+         */
+        function calculateSPC(data, dimKey) {
+            const n = data.length;
+            if (n < SPC_CONSTANTS.n) {
+                // Return default safe values if insufficient data
+                return { cp: '--', cpk: '--', xDoubleBar: 0, rBar: 0, UCL_X: 0, LCL_X: 0, UCL_R: 0, LCL_R: 0, processSigma: 0 };
+            }
+
+            const xBarData = data.map(d => d.xBar);
+            const RData = data.map(d => d.R);
+            // Use the passed dimension key for specs
+            const spec = DIMENSION_SPECS[dimKey]; 
+
+            // 1. Overall Averages
+            const sumXBar = xBarData.reduce((acc, val) => acc + val, 0);
+            const xDoubleBar = sumXBar / n;
+
+            const sumR = RData.reduce((acc, val) => acc + val, 0);
+            const rBar = sumR / n;
+
+            // 2. Control Limits
+            // X-Bar Chart
+            const UCL_X = xDoubleBar + (SPC_CONSTANTS.A2 * rBar);
+            const LCL_X = xDoubleBar - (SPC_CONSTANTS.A2 * rBar);
+            
+            // R Chart
+            const UCL_R = SPC_CONSTANTS.D4 * rBar;
+            const LCL_R = SPC_CONSTANTS.D3 * rBar; // D3=0 for n=2
+
+            // 3. Process Standard Deviation (Sigma)
+            const processSigma = rBar / SPC_CONSTANTS.d2;
+
+            // 4. Capability Indices
+            const USL = spec.USL;
+            const LSL = spec.LSL;
+            const tolerance = USL - LSL;
+
+            let Cp = '--';
+            let Cpk = '--';
+
+            if (processSigma > 0 && tolerance > 0) {
+                // Process Capability (Cp)
+                Cp = tolerance / (6 * processSigma);
+
+                // Process Capability Index (Cpk)
+                const Cpu = (USL - xDoubleBar) / (3 * processSigma);
+                const Cpl = (xDoubleBar - LSL) / (3 * processSigma);
+                Cpk = Math.min(Cpu, Cpl);
+            }
+            
+            return {
+                xDoubleBar,
+                rBar,
+                UCL_X, LCL_X,
+                UCL_R, LCL_R,
+                processSigma,
+                cp: Cp,
+                cpk: Cpk
+            };
+        }
+
+
+        // --- CAPABILITY DISPLAY ---
+
+        /**
+         * Updates the Capability Metrics display.
+         * @param {Object} results - SPC calculation results.
+         */
+        function updateCapabilityMetrics(results) {
+            const cpVal = safeParseFloat(results.cp);
+            const cpkVal = safeParseFloat(results.cpk);
+
+            document.getElementById('cpValue').textContent = cpVal === null ? '--' : cpVal.toFixed(2);
+            document.getElementById('cpkValue').textContent = cpkVal === null ? '--' : cpkVal.toFixed(2);
+
+            const statusBox = document.getElementById('capability-status');
+            
+            // Remove all existing state classes before applying the new one
+            statusBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700', 'bg-green-100', 'text-green-700');
+            
+            if (cpkVal === null || cpkVal === '--') {
+                statusBox.classList.add('hidden');
+                return;
+            }
+
+            let message = '';
+            let colorClass = '';
+
+            if (cpkVal >= 1.33) {
+                message = 'Process is Capable (World Class: Cpk \u2265 1.33)'; 
+                colorClass = 'bg-green-100 text-green-700';
+            } else if (cpkVal >= 1.0) {
+                message = 'Process is Marginally Capable (1.0 \u2264 Cpk < 1.33)';
+                colorClass = 'bg-yellow-100 text-yellow-700';
+            } else {
+                message = 'Process is NOT Capable (Cpk < 1.0)';
+                colorClass = 'bg-red-100 text-red-700';
+            }
+
+            statusBox.textContent = message;
+            // FIX: Use the spread operator to add multiple classes contained in the string
+            // This prevents the original InvalidCharacterError
+            statusBox.classList.add(...colorClass.split(' '));
+            statusBox.classList.remove('hidden');
+        }
+
+
+        // --- CHARTING FUNCTIONS (Chart.js) ---
+
+        /**
+         * Clears and destroys existing chart instances.
+         */
+        function clearCharts() {
+            if (xBarChartInstance) { xBarChartInstance.destroy(); xBarChartInstance = null; }
+            if (rChartInstance) { rChartInstance.destroy(); rChartInstance = null; }
+        }
+
+        /**
+         * Renders the X-Bar and R charts using Chart.js.
+         * @param {Array} data 
+         * @param {Object} results 
+         */
+        function renderCharts(data, results) {
+            clearCharts();
+
+            const labels = data.map((d, i) => `Day ${i + 1}`);
+            const xBarData = data.map(d => d.xBar);
+            const RData = data.map(d => d.R);
+            const n = data.length;
+
+            const xDoubleBarArray = Array(n).fill(results.xDoubleBar);
+            const UCL_X_Array = Array(n).fill(results.UCL_X);
+            const LCL_X_Array = Array(n).fill(results.LCL_X);
+
+            const rBarArray = Array(n).fill(results.rBar);
+            const UCL_R_Array = Array(n).fill(results.UCL_R);
+            const LCL_R_Array = Array(n).fill(results.LCL_R);
+            
+            // Function to check for out-of-control points (i.e., outside UCL/LCL)
+            const getPointStyle = (dataPoint, ucl, lcl) => {
+                if (dataPoint > ucl || dataPoint < lcl) {
+                    return 8; // Larger point for out-of-control
+                }
+                return 4;
+            };
+            
+            const xBarPointStyles = xBarData.map(val => getPointStyle(val, results.UCL_X, results.LCL_X));
+            const RPointStyles = RData.map(val => getPointStyle(val, results.UCL_R, results.LCL_R));
+
+
+            // X-BAR CHART CONFIG
+            const xBarCtx = document.getElementById('xBarChart').getContext('2d');
+            xBarChartInstance = new Chart(xBarCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'Subgroup Average (X-Bar)', // Simplified label
+                            data: xBarData, 
+                            borderColor: '#059669', 
+                            borderWidth: 2, 
+                            pointRadius: xBarPointStyles, 
+                            // Check for OOC status for coloring
+                            backgroundColor: (ctx) => {
+                                const value = ctx.parsed && !isNaN(ctx.parsed.y) ? ctx.parsed.y : null;
+                                if (value === null) return '#059669'; // Default for safety
+                                return value > results.UCL_X || value < results.LCL_X ? '#b91c1c' : '#059669'; // Red for OOC, Green for IC
+                            }, 
+                            pointBorderColor: (ctx) => {
+                                const value = ctx.parsed && !isNaN(ctx.parsed.y) ? ctx.parsed.y : null;
+                                if (value === null) return '#059669'; // Default for safety
+                                return value > results.UCL_X || value < results.LCL_X ? '#b91c1c' : '#059669'; // Red for OOC, Green for IC
+                            }, 
+                            tension: 0.2, 
+                            fill: false 
+                        },
+                        { label: 'Center Line (CL X-Bar)', data: xDoubleBarArray, borderColor: '#374151', borderWidth: 1, borderDash: [5, 5], pointRadius: 0, fill: false },
+                        { label: 'UCL', data: UCL_X_Array, borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, fill: false },
+                        { label: 'LCL', data: LCL_X_Array, borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: false } },
+                    scales: {
+                        y: { title: { display: true, text: 'Average Value (X-Bar)' } }, // Simplified label
+                        x: { title: { display: true, text: 'Subgroup (Day)' } }
+                    }
+                }
+            });
+
+            // R CHART CONFIG
+            const rCtx = document.getElementById('rChart').getContext('2d');
+            rChartInstance = new Chart(rCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'Subgroup Range', // Simplified label
+                            data: RData, 
+                            borderColor: '#f97316', 
+                            borderWidth: 2, 
+                            pointRadius: RPointStyles, 
+                            // Check for OOC status for coloring
+                            backgroundColor: (ctx) => {
+                                const value = ctx.parsed && !isNaN(ctx.parsed.y) ? ctx.parsed.y : null;
+                                if (value === null) return '#f97316';
+                                return value > results.UCL_R || value < results.LCL_R ? '#b91c1c' : '#f97316'; // Red for OOC, Orange for IC
+                            }, 
+                            pointBorderColor: (ctx) => {
+                                const value = ctx.parsed && !isNaN(ctx.parsed.y) ? ctx.parsed.y : null;
+                                if (value === null) return '#f97316';
+                                return value > results.UCL_R || value < results.LCL_R ? '#b91c1c' : '#f97316'; // Red for OOC, Orange for IC
+                            }, 
+                            tension: 0.2, 
+                            fill: false 
+                        },
+                        { label: 'Center Line (CL Range)', data: rBarArray, borderColor: '#374151', borderWidth: 1, borderDash: [5, 5], pointRadius: 0, fill: false },
+                        { label: 'UCL', data: UCL_R_Array, borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, fill: false },
+                        { label: 'LCL', data: LCL_R_Array, borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: false } },
+                    scales: {
+                        y: { min: 0, title: { display: true, text: 'Range Value' } }, // Simplified label
+                        x: { title: { display: true, text: 'Subgroup (Day)' } }
+                    }
+                }
+            });
+        }
+
+        // --- CSV DOWNLOAD ---
+
+        /**
+         * Downloads ALL dimensions' data as a single CSV file.
+         */
+        function downloadCSV() {
+            let csvContent = '';
+            const date = new Date().toISOString().slice(0, 10);
+
+            Object.keys(DIMENSION_SPECS).forEach(dimKey => {
+                const data = dailyData[dimKey];
+                const spec = DIMENSION_SPECS[dimKey];
+                
+                // Calculate SPC results for the current dimension
+                const results = calculateSPC(data, dimKey); 
+
+                // Format calculated results safely
+                const xDoubleBar = (typeof results.xDoubleBar === 'number') ? results.xDoubleBar.toFixed(3) : 'N/A';
+                const rBar = (typeof results.rBar === 'number') ? results.rBar.toFixed(3) : 'N/A';
+                const processSigma = (typeof results.processSigma === 'number') ? results.processSigma.toFixed(4) : 'N/A';
+                const cp = (typeof results.cp === 'number') ? results.cp.toFixed(2) : 'N/A';
+                const cpk = (typeof results.cpk === 'number') ? results.cpk.toFixed(2) : 'N/A';
+                const UCL_X = (typeof results.UCL_X === 'number') ? results.UCL_X.toFixed(3) : 'N/A';
+                const LCL_X = (typeof results.LCL_X === 'number') ? results.LCL_X.toFixed(3) : 'N/A';
+                const UCL_R = (typeof results.UCL_R === 'number') ? results.UCL_R.toFixed(3) : 'N/A';
+                const LCL_R = (typeof results.LCL_R === 'number') ? results.LCL_R.toFixed(3) : 'N/A';
+                
+                // Add Dimension Separator and Specs
+                csvContent += `\n\n--- DIMENSION: ${dimKey} (${spec.title}) ---\n`;
+                csvContent += `\nSpecification,Value,Calculated Metric,Value\n`;
+                csvContent += `Target,${spec.T},Overall Mean (X-Bar),${xDoubleBar}\n`; 
+                csvContent += `USL,${spec.USL},Average Range (R),${rBar}\n`;
+                csvContent += `LSL,${spec.LSL},Process Sigma,${processSigma}\n`;
+                csvContent += `\nControl Limit,Value,Capability Index,Value\n`;
+                csvContent += `UCL_X,${UCL_X},Cp,${cp}\n`;
+                csvContent += `LCL_X,${LCL_X},Cpk,${cpk}\n`;
+                csvContent += `UCL_R,${UCL_R},,\n`;
+                csvContent += `LCL_R,${LCL_R},,\n`;
+
+                // Add Raw Data Header
+                csvContent += '\nDay,Date,Sample 1,Sample 2,X-Bar,Range\n';
+                
+                // Add Raw Data Rows
+                if (data.length > 0) {
+                    const rows = data.map((d, index) => {
+                        return `${index + 1},${d.date},${d.s1.toFixed(3)},${d.s2.toFixed(3)},${d.xBar.toFixed(3)},${d.R.toFixed(3)}`;
+                    });
+                    csvContent += rows.join('\n');
+                } else {
+                    csvContent += 'No data available for this dimension.,,,,,,\n';
+                }
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `ALL_DIMENSIONS_SPC_Data_${date}.csv`);
+            
+            // Append and click the link to trigger download
+            document.body.appendChild(link);
+            link.click();
+            
+            // Clean up the temporary link and revoke the object URL
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showMessage('All dimension data successfully downloaded as CSV.', false);
+        }
+
+        // Initialize on load
+        window.onload = initializeApp;
+
+    </script>
+</body>
+</html>
