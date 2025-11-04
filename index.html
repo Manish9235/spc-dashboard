@@ -158,7 +158,7 @@
 
         <!-- Raw Data Table (Hidden on small screens) -->
         <div class="mt-6 bg-card p-6 rounded-xl shadow-lg border border-gray-200">
-            <h2 class="text-xl font-semibold mb-3 text-primary">Raw Data Table for <span id="table-dimension-title">BC1</span></h2>
+            <h2 class="text-xl font-semibold mb-3 text-primary">Raw Data Table for <span id="table-dimension-title"></span></h2>
             <div class="data-table-container overflow-x-auto">
                 <table id="dataTable" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -192,8 +192,9 @@
 
         const DIMENSION_SPECS = {
             // New parameter set for Fork Reverse Shift (FRS) - user provided
-            'Bore_SR_14': { T: 3.2, USL: 3.2, LSL: 3.2, title: 'Bore 14mm Surface Roughness: 3.2Ra' },
-            'Bore_SR_14.3': { T: 3.2, USL: 3.2, LSL: 3.2, title: 'Bore 14.3mm Surface Roughness: 3.2Ra' },
+            // Surface roughness: USL provided as 3.2Ra; lower spec set to 1.0Ra per request
+            'Bore_SR_14': { T: 3.2, USL: 3.2, LSL: 1.0, title: 'Bore 14mm Surface Roughness: USL 3.2Ra / LSL 1.0Ra' },
+            'Bore_SR_14.3': { T: 3.2, USL: 3.2, LSL: 1.0, title: 'Bore 14.3mm Surface Roughness: USL 3.2Ra / LSL 1.0Ra' },
             'Chamfer14.3_Depth': { T: 1.0, USL: 1.4, LSL: 0.6, title: 'Bore 14.3mm Chamfer Depth: 1 +0.4/-0.4' },
             'Chamfer14.3_Angle': { T: 30, USL: 31, LSL: 29, title: 'Bore 14.3mm Chamfer Angle: 30 +1/-1' },
             'Chamfer14_Depth': { T: 1.0, USL: 1.4, LSL: 0.6, title: 'Bore 14mm Chamfer Depth: 1 +0.4/-0.4' },
@@ -201,7 +202,8 @@
             'Bore_Dia_14.3': { T: 14.3, USL: 14.355, LSL: 14.308, title: 'Bore Diameter 14.3: +0.055/+0.008' }
         };
 
-        let currentDimension = 'BC1';
+        // Default to first defined specification key so the UI works after specs replacement
+        let currentDimension = Object.keys(DIMENSION_SPECS)[0] || '';
         // Data structure: { date: string, s1: number, s2: number, xBar: number, R: number }
         let dailyData = {}; // Key: dimensionName, Value: array of subgroup objects
 
@@ -744,11 +746,11 @@
             const date = new Date().toISOString().slice(0, 10);
 
             Object.keys(DIMENSION_SPECS).forEach(dimKey => {
-                const data = dailyData[dimKey];
+                const data = dailyData[dimKey] || [];
                 const spec = DIMENSION_SPECS[dimKey];
-                
+
                 // Calculate SPC results for the current dimension
-                const results = calculateSPC(data, dimKey); 
+                const results = calculateSPC(data, dimKey);
 
                 // Format calculated results safely
                 const xDoubleBar = (typeof results.xDoubleBar === 'number') ? results.xDoubleBar.toFixed(3) : 'N/A';
@@ -760,48 +762,53 @@
                 const LCL_X = (typeof results.LCL_X === 'number') ? results.LCL_X.toFixed(3) : 'N/A';
                 const UCL_R = (typeof results.UCL_R === 'number') ? results.UCL_R.toFixed(3) : 'N/A';
                 const LCL_R = (typeof results.LCL_R === 'number') ? results.LCL_R.toFixed(3) : 'N/A';
-                
-                // Add Dimension Separator and Specs
-                csvContent += `\n\n--- DIMENSION: ${dimKey} (${spec.title}) ---\n`;
-                csvContent += `\nSpecification,Value,Calculated Metric,Value\n`;
-                csvContent += `Target,${spec.T},Overall Mean (X-Bar),${xDoubleBar}\n`; 
-                csvContent += `USL,${spec.USL},Average Range (R),${rBar}\n`;
-                csvContent += `LSL,${spec.LSL},Process Sigma,${processSigma}\n`;
-                csvContent += `\nControl Limit,Value,Capability Index,Value\n`;
-                csvContent += `UCL_X,${UCL_X},Cp,${cp}\n`;
-                csvContent += `LCL_X,${LCL_X},Cpk,${cpk}\n`;
-                csvContent += `UCL_R,${UCL_R},,\n`;
-                csvContent += `LCL_R,${LCL_R},,\n`;
 
-                // Add Raw Data Header
-                csvContent += '\nDay,Date,Sample 1,Sample 2,X-Bar,Range\n';
-                
-                // Add Raw Data Rows
+                // Dimension header
+                csvContent += `\n\n--- DIMENSION: ${dimKey} (${spec.title}) ---\n\n`;
+
+                // Column-wise specification table (single row per dimension)
+                csvContent += 'Dimension,Target,USL,LSL\n';
+                csvContent += `${dimKey},${spec.T},${spec.USL},${spec.LSL}\n\n`;
+
+                // Other parameters row-wise
+                csvContent += 'Other Parameter,Value\n';
+                csvContent += `Overall Mean (X-Bar),${xDoubleBar}\n`;
+                csvContent += `Average Range (R),${rBar}\n`;
+                csvContent += `Process Sigma,${processSigma}\n`;
+                csvContent += `Cp,${cp}\n`;
+                csvContent += `Cpk,${cpk}\n`;
+                csvContent += `UCL_X,${UCL_X}\n`;
+                csvContent += `LCL_X,${LCL_X}\n`;
+                csvContent += `UCL_R,${UCL_R}\n`;
+                csvContent += `LCL_R,${LCL_R}\n\n`;
+
+                // Raw Data Header and Rows
+                csvContent += 'Day,Date,Sample 1,Sample 2,X-Bar,Range\n';
                 if (data.length > 0) {
                     const rows = data.map((d, index) => {
                         return `${index + 1},${d.date},${d.s1.toFixed(3)},${d.s2.toFixed(3)},${d.xBar.toFixed(3)},${d.R.toFixed(3)}`;
                     });
-                    csvContent += rows.join('\n');
+                    csvContent += rows.join('\n') + '\n';
                 } else {
-                    csvContent += 'No data available for this dimension.,,,,,,\n';
+                    csvContent += 'No data available for this dimension.,,,,,\n';
                 }
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            
+
             link.setAttribute('href', url);
             link.setAttribute('download', `ALL_DIMENSIONS_SPC_Data_${date}.csv`);
-            
+
             // Append and click the link to trigger download
             document.body.appendChild(link);
             link.click();
-            
+
             // Clean up the temporary link and revoke the object URL
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            
+
             showMessage('All dimension data successfully downloaded as CSV.', false);
         }
 
