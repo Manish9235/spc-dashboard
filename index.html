@@ -49,6 +49,10 @@
         <header class="bg-white shadow-lg rounded-2xl p-6 mb-6">
             <h1 class="text-3xl font-bold text-gray-800">FRS Part SPC Dashboard</h1>
             <p class="text-gray-500 mt-1">Real-time X-Bar and Range Chart Analysis for Quality Control</p>
+            <div class="mt-3 text-sm text-gray-600">
+                <p><span class="font-semibold">Part Name:</span> Fork Reverse Shift (FRS)</p>
+                <p><span class="font-semibold">Part No.:</span> 33211-0K061</p>
+            </div>
         </header>
 
         <!-- Main Content Grid -->
@@ -187,11 +191,14 @@
         };
 
         const DIMENSION_SPECS = {
-            'BC1': { T: 0.5, USL: 0.5, LSL: 0.2, title: 'BC1: 0.5 +0.0/-0.3' },
-            'C1': { T: 0.1, USL: 0.4, LSL: 0.1, title: 'C1: 0.1 +0.3' },
-            'C2': { T: 0.3, USL: 0.3, LSL: 0.1, title: 'C2: 0.3 +0.0/-0.2' },
-            'C3': { T: 0.5, USL: 0.5, LSL: 0.2, title: 'C3: 0.5 +0.0/-0.3' },
-            'CR': { T: 1.5, USL: 1.8, LSL: 1.2, title: 'CR: 1.5 +0.3/-0.3' }
+            // New parameter set for Fork Reverse Shift (FRS) - user provided
+            'Bore_SR_14': { T: 3.2, USL: 3.2, LSL: 3.2, title: 'Bore 14mm Surface Roughness: 3.2Ra' },
+            'Bore_SR_14.3': { T: 3.2, USL: 3.2, LSL: 3.2, title: 'Bore 14.3mm Surface Roughness: 3.2Ra' },
+            'Chamfer14.3_Depth': { T: 1.0, USL: 1.4, LSL: 0.6, title: 'Bore 14.3mm Chamfer Depth: 1 +0.4/-0.4' },
+            'Chamfer14.3_Angle': { T: 30, USL: 31, LSL: 29, title: 'Bore 14.3mm Chamfer Angle: 30 +1/-1' },
+            'Chamfer14_Depth': { T: 1.0, USL: 1.4, LSL: 0.6, title: 'Bore 14mm Chamfer Depth: 1 +0.4/-0.4' },
+            'Chamfer14_Angle': { T: 30, USL: 31, LSL: 29, title: 'Bore 14mm Chamfer Angle: 30 +1/-1' },
+            'Bore_Dia_14.3': { T: 14.3, USL: 14.355, LSL: 14.308, title: 'Bore Diameter 14.3: +0.055/+0.008' }
         };
 
         let currentDimension = 'BC1';
